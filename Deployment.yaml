@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bot-deployment
+  labels:
+    app: bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bot
+  template:
+    metadata:
+      labels:
+        app: bot
+    spec:
+      containers:
+        - name: bot
+          image: bot:v8
+          imagePullPolicy: Never
+          env:
+            - name: SLACK_CHANNEL
+              valueFrom:
+                configMapKeyRef:
+                  name: bot-demo
+                  key: slack.channel
+            - name: SLACK_TOKEN
+              valueFrom:
+                configMapKeyRef:
+                  name: bot-demo
+                  key: slack.token
+          # command:
+          #   - /bin/sleep
+          #   - "9999"
+          args:
+            - --slack.token
+            - "$(SLACK_TOKEN)"
+          volumeMounts:
+            - name: config
+              mountPath: "/config"
+              readOnly: true
+      volumes:
+        - name: config
+          configMap: 
+            name: bot-demo

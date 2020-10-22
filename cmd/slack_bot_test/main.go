@@ -21,8 +21,10 @@ var (
 
 func main(){
 	flag.Parse()
+	envCheck()
 	if err := flagChecker(slackToken, flagNameSlackToken); err != nil{
 		errors.Wrap(err, "error check flags")
+		fmt.Printf("flag error: %v\n", err)
 		return
 	}
 
@@ -34,6 +36,7 @@ func main(){
 	go rtm.ManageConnection()
 
 	var botID string
+	isFirstMsg := true
 	for msg := range rtm.IncomingEvents{
 		fmt.Println("Event Received")
 	//for msg := range rtm.IncomingEvents{
@@ -56,6 +59,10 @@ func main(){
 				text = strings.TrimSpace(text)
 				fmt.Printf("time stamp of msg %v\n", ev.Timestamp)
 				fmt.Printf("initial msg ThreadTimestamp %v\n", ev.ThreadTimestamp)
+				if isFirstMsg {
+					firstMSG(ev, info, rtm)
+					isFirstMsg = false
+				}
 				replayInChat(ev, &text, info, rtm)
 				replayInThread(ev, &text, info, rtm)
 			} else {
@@ -102,6 +109,15 @@ func replayInChat(ev *slack.MessageEvent, text *string, info *slack.Info, rtm *s
 	}
 }
 
+func firstMSG(ev *slack.MessageEvent, info *slack.Info, rtm *slack.RTM) {
+	if ev.User != info.User.ID {
+		message := fmt.Sprintf("SLACK_CHANNEL ---> %s\n", os.Getenv("SLACK_CHANNEL") )
+		rtm.SendMessage(rtm.NewOutgoingMessage(message, ev.Channel))
+
+	}
+}
+
+
 func reactToMsg(ev *slack.MessageEvent, rtm *slack.RTM){
 	ts := ev.Timestamp
 	if ev.ThreadTimestamp != "" {
@@ -131,3 +147,8 @@ func replayInThread(ev *slack.MessageEvent, text *string, info *slack.Info, rtm 
 	}
 }
 
+
+func envCheck() {
+	slackChannel :=  os.Getenv("SLACK_CHANNEL")
+	fmt.Printf("SLACK_CHANNEL ---> %s\n", slackChannel)
+}
