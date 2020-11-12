@@ -1,0 +1,9 @@
+bot:
+  image:
+    repository: bot
+    tag: v8
+    pullPolicy: Never
+config:
+  slack:
+    channel: "values_channel"
+    token: "xoxb-asdasdasdad"  

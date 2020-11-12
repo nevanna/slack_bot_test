@@ -1,1 +1,5 @@
 .idea/
+*.DS_Store*
+config_example.yaml
+configmap.yaml
+bot-chart/values.yaml
