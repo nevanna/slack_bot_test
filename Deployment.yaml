@@ -24,17 +24,22 @@ spec:
                 configMapKeyRef:
                   name: bot-demo
                   key: slack.channel
-            - name: SLACK_TOKEN
-              valueFrom:
-                configMapKeyRef:
-                  name: bot-demo
-                  key: slack.token
-          # command:
-          #   - /bin/sleep
-          #   - "9999"
+#            - name: SLACK_TOKEN
+#              valueFrom:
+#                configMapKeyRef:
+#                  name: bot-demo
+#                  key: slack.token
+#            - name: CONFIG_FILE
+#              valueFrom:
+#                configMapKeyRef:
+#                  name: bot-demo
+#                  key: config-name
+#          command:
+#           - /bin/sleep
+#           - "9999"
           args:
-            - --slack.token
-            - "$(SLACK_TOKEN)"
+            -  --config
+            - "config/config.yaml"
           volumeMounts:
             - name: config
               mountPath: "/config"

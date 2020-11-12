@@ -3,33 +3,43 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/slack-go/slack"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
 	"strings"
+
+	"github.com/pkg/errors"
+	"github.com/slack-go/slack"
+	"gopkg.in/yaml.v2"
 )
 
-const (
-	flagNameSlackToken = "slack.token"
-)
 var (
-	slackToken = flag.String(flagNameSlackToken, "", "slack API token")
+	config = flag.String("config", "", "path/to/config/file")
 )
 
+type ConfigData struct {
+	Slack *Slack `yaml:"slack"`
+}
 
-func main(){
+type Slack struct {
+	Token   string `yaml: "token"`
+	Channel string `yaml: "channel"`
+}
+
+func main() {
 	flag.Parse()
-	envCheck()
-	if err := flagChecker(slackToken, flagNameSlackToken); err != nil{
+	configFileStruct := applayConfig()
+	//envCheck()
+	if err := flagChecker(config, "configFile"); err != nil {
 		errors.Wrap(err, "error check flags")
 		fmt.Printf("flag error: %v\n", err)
 		return
 	}
+	checkConfig(configFileStruct.Slack)
 
 	slackClient := slack.New(
-		*slackToken,
+		configFileStruct.Slack.Token,
 		slack.OptionDebug(true),
 		slack.OptionLog(log.New(os.Stdout, "slack-bot: ", log.Lshortfile|log.LstdFlags)))
 	rtm := slackClient.NewRTM()
@@ -37,15 +47,14 @@ func main(){
 
 	var botID string
 	isFirstMsg := true
-	for msg := range rtm.IncomingEvents{
+	for msg := range rtm.IncomingEvents {
 		fmt.Println("Event Received")
-	//for msg := range rtm.IncomingEvents{
 		switch ev := msg.Data.(type) {
 		case *slack.HelloEvent:
 			fmt.Println("Hello event received")
 		case *slack.ConnectedEvent:
 			user, err := rtm.GetUserInfo(ev.Info.User.ID)
-			if err != nil{
+			if err != nil {
 				return
 			}
 			botID = user.Profile.BotID
@@ -60,7 +69,7 @@ func main(){
 				fmt.Printf("time stamp of msg %v\n", ev.Timestamp)
 				fmt.Printf("initial msg ThreadTimestamp %v\n", ev.ThreadTimestamp)
 				if isFirstMsg {
-					firstMSG(ev, info, rtm)
+					firstMSG(ev, info, rtm, configFileStruct.Slack)
 					isFirstMsg = false
 				}
 				replayInChat(ev, &text, info, rtm)
@@ -83,48 +92,44 @@ func main(){
 
 }
 
-func flagChecker(fl *string, flName string) error{
-	if len(*fl) == 0 || *fl == ""{
-		return  fmt.Errorf("%s is empty or invalid [%s]", flName, *fl)
+func flagChecker(fl *string, flName string) error {
+	if len(*fl) == 0 || *fl == "" {
+		return fmt.Errorf("%s is empty or invalid [%s]", flName, *fl)
 	}
 	return nil
 }
 
-
-
 var answers = [...]string{"Hello", "Good morning", "Good evening", "Hi", "Greetings", "I miss you"}
 
-func randomAnswer() *string{
+func randomAnswer() *string {
 	idx := rand.Intn(len(answers))
 	return &answers[idx]
 }
-
 
 func replayInChat(ev *slack.MessageEvent, text *string, info *slack.Info, rtm *slack.RTM) {
 	containedLink := strings.Contains(*text, "link")
 	reactToMsg(ev, rtm)
 	if ev.User != info.User.ID && containedLink {
-		rtm.SendMessage(rtm.NewOutgoingMessage("Link is detected in message :100:", ev.Channel))
+		rtm.SendMessage(rtm.NewOutgoingMessage("`Link` is detected in message :100:", ev.Channel))
 
 	}
 }
 
-func firstMSG(ev *slack.MessageEvent, info *slack.Info, rtm *slack.RTM) {
+func firstMSG(ev *slack.MessageEvent, info *slack.Info, rtm *slack.RTM, s *Slack) {
 	if ev.User != info.User.ID {
-		message := fmt.Sprintf("SLACK_CHANNEL ---> %s\n", os.Getenv("SLACK_CHANNEL") )
+		message := fmt.Sprintf("SLACK_CHANNEL ---> %s\n", s.Channel)
 		rtm.SendMessage(rtm.NewOutgoingMessage(message, ev.Channel))
 
 	}
 }
 
-
-func reactToMsg(ev *slack.MessageEvent, rtm *slack.RTM){
+func reactToMsg(ev *slack.MessageEvent, rtm *slack.RTM) {
 	ts := ev.Timestamp
 	if ev.ThreadTimestamp != "" {
 		ts = ev.ThreadTimestamp
 	}
 	reactionTarget := slack.ItemRef{
-		Channel: ev.Channel,
+		Channel:   ev.Channel,
 		Timestamp: ts,
 	}
 	if err := rtm.AddReaction("100", reactionTarget); err != nil {
@@ -132,23 +137,46 @@ func reactToMsg(ev *slack.MessageEvent, rtm *slack.RTM){
 	}
 }
 
-
-func replayInThread(ev *slack.MessageEvent, text *string, info *slack.Info, rtm *slack.RTM){
+func replayInThread(ev *slack.MessageEvent, text *string, info *slack.Info, rtm *slack.RTM) {
 	containedHi := strings.Contains(*text, "hi")
 	if ev.User != info.User.ID && containedHi {
 		ts := ev.Timestamp
 		if ev.ThreadTimestamp != "" {
 			ts = ev.ThreadTimestamp
 		}
-		answer:= rtm.NewOutgoingMessage(*randomAnswer(), ev.Channel)
+		answer := rtm.NewOutgoingMessage(*randomAnswer(), ev.Channel)
 		answer.ThreadTimestamp = ts
-		fmt.Printf("ThreadTimestamp %v\n",answer.ThreadTimestamp)
+		fmt.Printf("ThreadTimestamp %v\n", answer.ThreadTimestamp)
 		rtm.SendMessage(answer)
 	}
 }
 
-
 func envCheck() {
-	slackChannel :=  os.Getenv("SLACK_CHANNEL")
+	slackChannel := os.Getenv("SLACK_CHANNEL")
 	fmt.Printf("SLACK_CHANNEL ---> %s\n", slackChannel)
+}
+
+func checkConfig(s *Slack) {
+	fmt.Printf("token is -> \"%s\" \n", s.Token)
+	fmt.Printf("channel is -> \"%s\" \n", s.Channel)
+}
+
+func applayConfig() *ConfigData {
+	if *config == "" {
+		log.Fatalf("error: no config file")
+	}
+	content, err := ioutil.ReadFile(*config)
+	if err != nil {
+		fmt.Println("error reading")
+		log.Fatalf("error: %v", err)
+	}
+	fmt.Println(content)
+	config := ConfigData{}
+	err = yaml.Unmarshal(content, &config)
+	if err != nil {
+		fmt.Println("error reading")
+		log.Fatalf("error: %v", err)
+	}
+	fmt.Printf("--- t:\n%v\n\n", config)
+	return &config
 }

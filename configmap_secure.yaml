@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bot-demo
+data:
+  config.yaml: |
+    slack:
+      token: "xoxb-asdasdasda"
+      channel: "channel_config_file_config_map"
+  slack.channel: "config_map_test_channel"

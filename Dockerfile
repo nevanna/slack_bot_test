@@ -6,6 +6,7 @@ COPY . $GOPATH/src/slack_bot_test
 WORKDIR $GOPATH/src/slack_bot_test/cmd/slack_bot_test/
 RUN go get github.com/slack-go/slack@v0.7.2
 RUN go get github.com/pkg/errors@v0.9.1
+RUN go get gopkg.in/yaml.v2@v2.3.0
 RUN go build -o /main main.go
 
 #SECOND STAGE
